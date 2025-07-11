@@ -1,0 +1,62 @@
+
+name: CI/CD for SD-WAN OPNsense Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - sdwan-deployment
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate Ansible & Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install Ansible and Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint
+
+      - name: Run Ansible Lint
+        run: ansible-lint ansible/
+
+      - name: Validate Docker Compose File
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+          docker-compose -f docker/docker-compose.yml config
+
+  deploy:
+    name: Deploy to Docker Host & OPNsense
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Ansible for Deployment
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Set SSH Key for Remote Ansible Access
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook ansible/playbook.yml -i ansible/inventory.ini
